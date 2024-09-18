@@ -1,19 +1,21 @@
 import requests
 import json
-from table2ascii import table2ascii as t2a, PresetStyle
 import time as clock
 import string
 import drawTable
+from secrets import getLeagueID, getRapidApiKey
+import datetime
+from zoneinfo import ZoneInfo
 
 def fakePlayerInfo():
     return None
         
 def getSchedule(rosterID,week):
-    f = open('schedule.json')
+    f = open('./json/schedule.json')
     data = json.load(f)
     return int(data['week'+str(week)][str(rosterID)])
 def getOpponent(rosterID,week):
-    f = open('schedule.json')
+    f = open('./json/schedule.json')
     data = json.load(f)
     return int(data['opponent'+str(week)][str(rosterID)])
 def calculateWLT(roster, week,teamNames, leagueIDA,leagueIDB):
@@ -54,7 +56,7 @@ def calculateAllScores(leagueIDA,leagueIDB):
     hoursBetweenRequests = 24
     try:
         
-        f = open('scores.json')
+        f = open('./json/scores.json')
         
         data = json.load(f)
         
@@ -78,7 +80,7 @@ def requestScores(leagueIDA,leagueIDB, time):
         for score in scoresFromWeek:
             rosters.update({score['roster_id']:score})
         scores.update({str(i):rosters})
-    with open('./scores.json', 'w') as f:
+    with open('./json/scores.json', 'w') as f:
         json.dump(scores, f)
     return scores
 def getNumOfWeeks():
@@ -125,7 +127,7 @@ def getPlayers():
     hoursBetweenRequests = 24
     try:
         
-        f = open('players.json')
+        f = open('./json/players.json')
         
         data = json.load(f)
         
@@ -145,7 +147,7 @@ def requestPlayers(time):
     url = 'https://api.sleeper.app/v1/players/nfl'
     allPlayers = requests.get(url).json()
     allPlayers['time'] = time
-    with open('players.json', 'w') as f:
+    with open('./json/players.json', 'w') as f:
         json.dump(allPlayers, f)
     return allPlayers
     
@@ -371,72 +373,33 @@ def createScheduleTable(allTeams, matchups, allPlayers, week, teamNames, matchup
     header = [teamNames[player][2], '','opponent score', 'WLT',teamNames[player][2]+' score']
     body, wins, losses, ties,totalSeasonScore = calculateWLT(player, week,teamNames, leagueIDA,leagueIDB)
     return drawTable.drawScheduleTable(header, body, player, week)
-    
-    
-    
-def createSingleTeamTable():
-    #drawSingleTeamTable([['Kirk Cousins',23,25, 'QB'],['Adrian Peterson',13,15, 'RB'],['Aaaaaaaaaaaaaaron Rodgers', 1,1,'FLEX']])
-    body = []
-    header = []
-    footer = []
-    index = 0
-    teamName = ''
-    teamOwner = ''
-    for game in matchups:
-        index +=1
-        if(index == matchupNumber):
-            player1 = game[matchupPlayerSelected]-1
-            
-            teamOwner = str(teamNames[player1][1])
-            teamName = str(teamNames[player1][2])
-            
-            player1Score = str(allTeams[player1]['points'])
-            
-            header = [player1Name,'', "Proj. ", "Score",'', "Score", "Proj. ",'', player2Name]
-            team1 = None
-            team2 = None
-            for team in allTeams:
-                if(team['roster_id'] == player1):
-                    if(team1==None):
-                        team1=team
-                        break
-            totalScore1 = 0
-            totalScore2 = 0
-            totalProjectedScore1 = 0
-            totalProjectedScore2 = 0
-            
-                
-            team1 = breakDownWeeklyForOneTeam(allTeams, player1, allPlayers)
-            
-                #rosterID,player,findPlayerName(player,allPlayers), players[player]
-            for i in range(0,len(team1)):
-                rosterSpot1 = team1[i]
-                rosterSpot2 = team2[i]
-                
-                projected1 = getProjectionsForPlayer(rosterSpot1[1], allPlayers, week)['fantasyPoints']
-                
-                score1 = rosterSpot1[3]
-                
-                if(i<len(allTeams[player1]['starters'])):
-                    totalScore1 += float(score1)
-                    
-                    totalProjectedScore1 += float(projected1)
-                    
-                body.append([rosterSpot1[2][0],rosterSpot1[2][1],projected1,score1,'', score2, projected2,rosterSpot2[2][1],rosterSpot2[2][0]])
-                #
-            
-            #footer = ['','',"{:.2f}".format(totalProjectedScore1) , "{:.2f}".format(totalScore1),'', "{:.2f}".format(totalScore2), "{:.2f}".format(totalProjectedScore2),'', '']
+def getCurrentGameStatus():
+    time = clock.time()
+    hoursBetweenRequests = 0.5
+    try:
+        f = open('./json/'+str(week)+'liveGames.json')
         
-        #body.append([player1Name,player1Team,player1Score,' vs ',player2Score,player2Team,player2Name])
-    #values, teamName, teamOwner, button1, button2, week    
-    drawTable.drawSingleTeamTable( body, footer, matchupNumber,week)    
+        data = json.load(f)
+        
+        oldTime = data['time']
+        
+        passTime = time - float(oldTime)
+        passTime = (passTime/60)/60
+        
+        if(passTime > hoursBetweenRequests):
+            return requestCurrentGameStatus(week,time,allPlayers)
+        return data
+    except:
+        #pass
+        return requestCurrentGameStatus(week,time,allPlayers)
+
 def getProjections(week,allPlayers):
     
     time = clock.time()
-    hoursBetweenRequests = 1
+    hoursBetweenRequests = 8
     try:
         
-        f = open(str(week)+'.json')
+        f = open('./json/'+str(week)+'.json')
         
         data = json.load(f)
         
@@ -476,7 +439,7 @@ def requestProjections(week, time, allPlayers):
     "xpMade":"1",
     "xpMissed":"-1"}
     headers = {
-        "x-rapidapi-key": "16ae5bc9c9msh685c1a434ca0ce8p114238jsn876e4b1f06d1",
+        "x-rapidapi-key": getRapidApiKey(),
         "x-rapidapi-host": "tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com"
     }
     response = requests.get(url, headers=headers, params=querystring)
@@ -484,7 +447,7 @@ def requestProjections(week, time, allPlayers):
     data = associateProjectionsWithPlayer(data, allPlayers)
     new_data = {"time":str(time)}
     data['time'] = str(time)
-    with open(str(week)+'.json', 'w') as f:
+    with open('./json/'+str(week)+'.json', 'w') as f:
         json.dump(data, f)
     
     return data
